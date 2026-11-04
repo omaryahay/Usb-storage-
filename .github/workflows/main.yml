@@ -1,1 +1,31 @@
+name: USB Storage Guard BAT
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: windows-latest
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Check BAT file
+        shell: pwsh
+        run: |
+          if (!(Test-Path "USBStorageGuard.bat")) {
+            throw "USBStorageGuard.bat not found"
+          }
+
+      - name: Upload BAT file
+        uses: actions/upload-artifact@v4
+        with:
+          name: USBStorageGuard-BAT
+          path: USBStorageGuard.bat
