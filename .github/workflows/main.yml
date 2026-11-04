@@ -1,4 +1,5 @@
-name: USB Storage Guard BAT
+
+name: Build USB Storage Guard EXE
 
 on:
   workflow_dispatch:
@@ -10,22 +11,80 @@ permissions:
   contents: read
 
 jobs:
-  prepare:
+  build:
     runs-on: windows-latest
 
     steps:
       - name: Download project
         uses: actions/checkout@v4
 
-      - name: Check BAT file
+      - name: Prepare BAT package
         shell: pwsh
         run: |
           if (!(Test-Path "USBStorageGuard.bat")) {
             throw "USBStorageGuard.bat not found"
           }
 
-      - name: Upload BAT file
+          New-Item -ItemType Directory -Force dist, stage | Out-Null
+          Copy-Item USBStorageGuard.bat stage/
+
+      - name: Create EXE using IExpress
+        shell: pwsh
+        run: |
+          $stage = (Resolve-Path "stage").Path
+          $out = Join-Path (Resolve-Path "dist").Path "USBStorageGuard.exe"
+          $sedPath = Join-Path $PWD "package.sed"
+
+          $sed = @"
+          [Version]
+          Class=IEXPRESS
+          SEDVersion=3
+
+          [Options]
+          PackagePurpose=InstallApp
+          ShowInstallProgramWindow=1
+          HideExtractAnimation=1
+          UseLongFileName=1
+          InsideCompressed=0
+          CAB_FixedSize=0
+          CAB_ResvCodeSigning=0
+          RebootMode=N
+          InstallPrompt=
+          DisplayLicense=
+          FinishMessage=
+          TargetName=$out
+          FriendlyName=USB Storage Guard
+          AppLaunched=cmd.exe /c USBStorageGuard.bat
+          PostInstallCmd=<None>
+          AdminQuietInstCmd=
+          UserQuietInstCmd=
+          SourceFiles=SourceFiles
+
+          [SourceFiles]
+          SourceFiles0=$stage
+
+          [SourceFiles0]
+          %FILE0%=
+
+          [Strings]
+          FILE0="USBStorageGuard.bat"
+          "@
+
+          Set-Content -Path $sedPath -Value $sed -Encoding ASCII
+
+          $iexpress = "$env:WINDIR\System32\iexpress.exe"
+          if (!(Test-Path $iexpress)) {
+            throw "IExpress is unavailable"
+          }
+
+          & $iexpress /N /Q $sedPath
+
+          if (!(Test-Path $out)) {
+            throw "EXE build failed"
+          }
+
+      - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: USBStorageGuard-BAT
-          path: USBStorageGuard.bat
+          name: USBStorageGuard-Windows-EXE
+          path: dist/USBStorageGuard.exe
